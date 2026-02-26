@@ -30,7 +30,7 @@ config = types.GenerateContentConfig(tools=[tools])
 
 response = client.models.generate_content(
     model="gemini-3-flash-preview",
-    contents="registrame, me llamo Jesus y mi correo es ov863936@gmail.com",
+    contents="",
     config=config,
 )
 
