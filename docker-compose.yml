@@ -1,0 +1,87 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: n8n_user
+      POSTGRES_PASSWORD: stcjw829832h
+      POSTGRES_MULTIPLE_DATABASES: n8n_db,evolution_db
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    networks:
+      - bot_net
+
+  redis:
+    image: redis:6-alpine
+    container_name: redis_cache
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    networks:
+      - bot_net
+
+  evolution:
+    image: atendai/evolution-api:latest
+    container_name: evolution_api
+    restart: always
+    shm_size: 1gb
+    environment:
+      - SERVER_TYPE=http
+      - SERVER_PORT=8080
+      - SERVER_URL=https://evo.jesusortega.tech # 👈 Tu subdominio con HTTPS
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://n8n_user:stcjw829832h@db:5432/evolution_db?sslmode=disable
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://redis:6379/6
+      - AUTHENTICATION_API_KEY=fxtra5646hgsg
+    depends_on:
+      - db
+      - redis
+    networks:
+      - bot_net
+      - red-traefik # 👈 Conexión al proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.evolution.rule=Host(`evo.jesusortega.tech`)" # 👈 Tu subdominio
+      - "traefik.http.routers.evolution.entrypoints=websecure"
+      - "traefik.http.routers.evolution.tls.certresolver=myresolver" # 👈 Verifica el nombre en tu otro yml
+      - "traefik.http.services.evolution.loadbalancer.server.port=8080"
+      - "traefik.docker.network=red-traefik"
+    volumes:
+      - evolution_data:/evolution
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n_app
+    restart: always
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=db
+      - DB_POSTGRESDB_DATABASE=n8n_db
+      - DB_POSTGRESDB_USER=n8n_user
+      - DB_POSTGRESDB_PASSWORD=stcjw829832h
+      - N8N_HOST=n8n.jesusortega.tech # 👈 Tu subdominio
+      - WEBHOOK_URL=https://n8n.jesusortega.tech/
+    depends_on:
+      - db
+    networks:
+      - bot_net
+      - red-traefik # 👈 Conexión al proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.n8n.rule=Host(`n8n.jesusortega.tech`)" # 👈 Tu subdominio
+      - "traefik.http.routers.n8n.entrypoints=websecure"
+      - "traefik.http.routers.n8n.tls.certresolver=myresolver"
+      - "traefik.http.services.n8n.loadbalancer.server.port=5678"
+      - "traefik.docker.network=red-traefik"
+
+networks:
+  bot_net:
+    driver: bridge
+  red-traefik:
+    external: true # 👈 ESTO ES LO MÁS IMPORTANTE
+
+volumes:
+  evolution_data:

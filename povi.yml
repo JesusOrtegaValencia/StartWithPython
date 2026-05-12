@@ -1,0 +1,92 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: n8n_user
+      POSTGRES_PASSWORD: stcjw829832h
+      POSTGRES_MULTIPLE_DATABASES: n8n_db,evolution_db
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    networks:
+      - bot_net
+
+  redis:
+    image: redis:6-alpine
+    container_name: redis_cache
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    networks:
+      - bot_net
+
+  evolution:
+    image: atendai/evolution-api:latest
+    container_name: evolution_api
+    restart: always
+
+    shm_size: 1gb   # 🔥 CRÍTICO para Chromium
+
+    environment:
+      - SERVER_TYPE=http
+      - SERVER_PORT=8080
+      - SERVER_URL=http://evolution:8080  # 🔥 NO localhost
+
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://n8n_user:stcjw829832h@db:5432/evolution_db?sslmode=disable
+      - DATABASE_CONNECTION_CLIENT_NAME=evolution_jesus
+
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
+      - DATABASE_SAVE_DATA_CONTACTS=true
+      - DATABASE_SAVE_DATA_CHATS=true
+
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://redis:6379/6
+      - CACHE_REDIS_PREFIX_KEY=evolution
+      - CACHE_REDIS_SAVE_INSTANCES=false
+      - CACHE_LOCAL_ENABLED=false
+
+      - AUTHENTICATION_API_KEY=fxtra5646hgsg
+      - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
+
+      
+      - CONFIG_SESSION_PHONE_VERSION=2.3000.1038839325
+
+    depends_on:
+      - db
+      - redis
+
+    ports:
+      - "8080:8080"
+
+    networks:
+      - bot_net
+
+    volumes:
+      - evolution_data:/evolution
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n_app
+    restart: always
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=db
+      - DB_POSTGRESDB_DATABASE=n8n_db
+      - DB_POSTGRESDB_USER=n8n_user
+      - DB_POSTGRESDB_PASSWORD=stcjw829832h
+    ports:
+      - "5678:5678"
+    depends_on:
+      - db
+    networks:
+      - bot_net
+
+networks:
+  bot_net:
+    driver: bridge
+volumes:
+  evolution_data:
